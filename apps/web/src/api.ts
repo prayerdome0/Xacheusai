@@ -16,7 +16,15 @@ export interface PublicConfig {
     messagingSenderId: string;
     appId: string;
   };
-  features: { model: string; modelBuiltin: boolean; storage: string; tools: number };
+  features: {
+    model: string;
+    modelBuiltin: boolean;
+    storage: string;
+    tools: number;
+    runtime?: 'server' | 'serverless';
+    websockets?: boolean;
+    durableStorage?: boolean;
+  };
 }
 
 export interface UiAction {
@@ -242,18 +250,99 @@ export const api = {
 };
 
 /** Live event stream (WebSocket) for run progress and notifications. */
-export function connectEvents(onEvent: (event: any) => void): () => void {
+export interface EventChannel {
+  /** 'websocket' = live stream, 'polling' = HTTP fallback. */
+  transport: 'websocket' | 'polling';
+  close: () => void;
+}
+
+/**
+ * Console event feed.
+ *
+ * Prefers the WebSocket (real-time run progress, no polling cost). On hosting
+ * that terminates WebSockets — Vercel's serverless functions cannot hold one —
+ * it falls back to polling the run list instead of leaving a dead socket that
+ * looks live but never updates. [onTransport] reports which one is in use so the
+ * UI can say so out loud rather than implying a live feed it does not have.
+ */
+export function connectEvents(
+  onEvent: (event: any) => void,
+  onTransport?: (transport: 'websocket' | 'polling') => void,
+): EventChannel {
   const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
   const token = getToken();
-  const socket = new WebSocket(`${protocol}://${location.host}/api/events?token=${encodeURIComponent(token)}`);
-  socket.onmessage = (message) => {
-    try {
-      const frame = JSON.parse(message.data);
-      if (frame.type === 'hello') onEvent({ name: 'hello', payload: frame.recent });
-      else if (frame.type === 'event') onEvent(frame.event);
-    } catch {
-      /* ignore malformed frames */
-    }
+  let socket: WebSocket | null = null;
+  let pollTimer: number | null = null;
+  let closed = false;
+  let lastSeen = '';
+  let transport: 'websocket' | 'polling' = 'websocket';
+
+  const stopPolling = () => {
+    if (pollTimer !== null) window.clearInterval(pollTimer);
+    pollTimer = null;
   };
-  return () => socket.close();
+
+  /** Only report *new* events: the console should not repeat history every tick. */
+  const startPolling = () => {
+    if (pollTimer !== null || closed) return;
+    transport = 'polling';
+    onTransport?.('polling');
+    pollTimer = window.setInterval(async () => {
+      try {
+        const payload = await request<{ runs: any[] }>('/api/runs?limit=10');
+        const runs: any[] = payload.runs ?? [];
+        const newest = runs[0];
+        if (newest && newest.updatedAt !== lastSeen) {
+          lastSeen = newest.updatedAt;
+          onEvent({ name: 'run.updated', payload: newest, at: new Date().toISOString() });
+        }
+        const notifications = await request<{ notifications: any[] }>('/api/notifications?limit=5');
+        const unread = (notifications.notifications ?? []).filter((entry) => !entry.read);
+        if (unread.length) onEvent({ name: 'notification.created', payload: unread[0], at: new Date().toISOString() });
+      } catch {
+        /* transient failures are fine; the next tick retries */
+      }
+    }, 5000);
+  };
+
+  try {
+    socket = new WebSocket(`${protocol}://${location.host}/api/events?token=${encodeURIComponent(token)}`);
+    socket.onmessage = (message) => {
+      try {
+        if (transport !== 'websocket') {
+          transport = 'websocket';
+          stopPolling();
+          onTransport?.('websocket');
+        }
+        const frame = JSON.parse(message.data);
+        if (frame.type === 'hello') onEvent({ name: 'hello', payload: frame.recent });
+        else if (frame.type === 'event') onEvent(frame.event);
+      } catch {
+        /* ignore malformed frames */
+      }
+    };
+    socket.onclose = () => {
+      if (!closed) startPolling();
+    };
+    socket.onerror = () => {
+      if (!closed) startPolling();
+    };
+  } catch {
+    startPolling();
+  }
+
+  return {
+    get transport() {
+      return transport;
+    },
+    close: () => {
+      closed = true;
+      stopPolling();
+      try {
+        socket?.close();
+      } catch {
+        /* already gone */
+      }
+    },
+  } as EventChannel;
 }

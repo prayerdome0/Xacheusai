@@ -26,8 +26,12 @@ import type { Orchestrator } from './agents/orchestrator.js';
 import type { AgentId } from './types.js';
 
 export interface Services {
+  /** 'server' on a long-lived process, 'serverless' on a function platform. */
+  runtime: 'server' | 'serverless';
   config: ConfigStore;
   storage: StorageDriver;
+  /** Notes from storage setup, e.g. "Firestore was requested but unusable". */
+  storageNotes: string[];
   events: EventBus;
   audit: AuditLog;
   permissions: PermissionEngine;

@@ -52,6 +52,21 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_AUTO_CONNECT, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_CONNECT, value).apply()
 
+    /**
+     * How the phone reaches the backend.
+     *
+     *   auto      — try the WebSocket, fall back to HTTP polling (recommended)
+     *   websocket — always stream, for a self-hosted server
+     *   poll      — always poll, for serverless hosting or hostile networks
+     */
+    var transport: String
+        get() = prefs.getString(KEY_TRANSPORT, "auto") ?: "auto"
+        set(value) = prefs.edit().putString(KEY_TRANSPORT, value).apply()
+
+    var pollSeconds: Int
+        get() = prefs.getInt(KEY_POLL_SECONDS, 5)
+        set(value) = prefs.edit().putInt(KEY_POLL_SECONDS, value.coerceIn(2, 60)).apply()
+
     val isPaired: Boolean get() = serverUrl.isNotEmpty() && deviceToken.isNotEmpty()
 
     fun webSocketUrl(): String {
@@ -72,5 +87,7 @@ class SettingsStore(context: Context) {
         private const val KEY_WAKE_WORD = "wake_word"
         private const val KEY_SPEAK = "speak_replies"
         private const val KEY_AUTO_CONNECT = "auto_connect"
+        private const val KEY_TRANSPORT = "transport"
+        private const val KEY_POLL_SECONDS = "poll_seconds"
     }
 }

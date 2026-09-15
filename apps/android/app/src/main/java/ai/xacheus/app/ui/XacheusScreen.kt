@@ -79,12 +79,14 @@ fun XacheusScreen(
     connected: Boolean,
     wakeEnabled: Boolean,
     speakReplies: Boolean,
+    transport: String,
     transcript: SnapshotStateList<MainActivity.Turn>,
     onSave: () -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     onToggleWake: (Boolean) -> Unit,
     onSpeakChange: (Boolean) -> Unit,
+    onTransportChange: (String) -> Unit,
     onMicPressed: () -> Unit,
     onSend: (String) -> Unit,
     onApprove: () -> Unit,
@@ -127,12 +129,14 @@ fun XacheusScreen(
                 paired = paired,
                 wakeEnabled = wakeEnabled,
                 speakReplies = speakReplies,
+                transport = transport,
                 listeningStatus = listeningStatus,
                 onSave = onSave,
                 onConnect = onConnect,
                 onDisconnect = onDisconnect,
                 onToggleWake = onToggleWake,
                 onSpeakChange = onSpeakChange,
+                onTransportChange = onTransportChange,
             )
         }
 
@@ -240,12 +244,14 @@ private fun SettingsCard(
     paired: Boolean,
     wakeEnabled: Boolean,
     speakReplies: Boolean,
+    transport: String,
     listeningStatus: String,
     onSave: () -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     onToggleWake: (Boolean) -> Unit,
     onSpeakChange: (Boolean) -> Unit,
+    onTransportChange: (String) -> Unit,
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Surface),
@@ -292,6 +298,27 @@ private fun SettingsCard(
                 if (paired) {
                     OutlinedButton(onClick = if (connected) onDisconnect else onConnect, modifier = Modifier.weight(1f)) {
                         Text(if (connected) "Disconnect" else "Connect")
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Divider(color = Color(0xFF262B4D))
+            Spacer(Modifier.height(10.dp))
+            Text("Connection", color = Color.White, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Streaming keeps a live socket open (best with your own server). Polling collects work over HTTP, " +
+                    "which is what serverless hosting like Vercel requires. Auto tries streaming first.",
+                color = Muted,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("auto" to "Auto", "websocket" to "Stream", "poll" to "Poll").forEach { (value, label) ->
+                    if (transport == value) {
+                        Button(onClick = { onTransportChange(value) }) { Text(label) }
+                    } else {
+                        OutlinedButton(onClick = { onTransportChange(value) }) { Text(label) }
                     }
                 }
             }

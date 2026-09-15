@@ -3,6 +3,7 @@ package ai.xacheus.app
 import ai.xacheus.app.data.SettingsStore
 import ai.xacheus.app.device.PermissionGate
 import ai.xacheus.app.net.DeviceSocket
+import ai.xacheus.app.net.PollTransport
 import ai.xacheus.app.net.XacheusClient
 import ai.xacheus.app.ui.XacheusScreen
 import ai.xacheus.app.voice.Speaker
@@ -32,6 +33,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var speaker: Speaker
     private lateinit var speech: SpeechEngine
     private var deviceSocket: DeviceSocket? = null
+    private var pollTransport: PollTransport? = null
 
     private var serverUrl by mutableStateOf("")
     private var token by mutableStateOf("")
@@ -39,6 +41,7 @@ class MainActivity : ComponentActivity() {
     private var wakeEnabled by mutableStateOf(false)
     private var speakReplies by mutableStateOf(true)
     private var connectionStatus by mutableStateOf("Not connected")
+    private var transport by mutableStateOf("auto")
     private var listeningStatus by mutableStateOf("Idle")
     private var connected by mutableStateOf(false)
     private val transcript = mutableStateListOf<Turn>()
@@ -65,6 +68,7 @@ class MainActivity : ComponentActivity() {
         deviceName = settings.deviceName
         wakeEnabled = settings.wakeWordEnabled
         speakReplies = settings.speakReplies
+        transport = settings.transport
 
         requestNotificationPermission()
         if (settings.autoConnect && settings.isPaired) connect()
@@ -84,6 +88,12 @@ class MainActivity : ComponentActivity() {
                 wakeEnabled = wakeEnabled,
                 speakReplies = speakReplies,
                 transcript = transcript,
+                transport = transport,
+                onTransportChange = { choice ->
+                    transport = choice
+                    settings.transport = choice
+                    if (settings.isPaired) connect()
+                },
                 onSave = {
                     settings.serverUrl = serverUrl
                     settings.deviceToken = token
@@ -94,8 +104,7 @@ class MainActivity : ComponentActivity() {
                 },
                 onConnect = { connect() },
                 onDisconnect = {
-                    deviceSocket?.stop()
-                    deviceSocket = null
+                    stopTransports()
                     connected = false
                     connectionStatus = "Disconnected."
                 },
@@ -144,24 +153,61 @@ class MainActivity : ComponentActivity() {
             connectionStatus = "Enter the server URL and device bridge token first."
             return
         }
-        deviceSocket?.stop()
-        deviceSocket = DeviceSocket(this, settings, lifecycleScope).also { socket ->
-            socket.listener = object : DeviceSocket.Listener {
-                override fun onStatus(isConnected: Boolean, detail: String) {
-                    runOnUiThread {
-                        connected = isConnected
-                        connectionStatus = detail
-                    }
-                }
+        stopTransports()
 
-                override fun onCommand(command: String, summary: String) {
-                    runOnUiThread {
-                        transcript.add(Turn(false, "[$command] $summary"))
-                    }
+        when (settings.transport) {
+            "poll" -> startPolling("Polling transport selected.")
+            else -> startSocket()
+        }
+    }
+
+    private fun startSocket() {
+        deviceSocket = DeviceSocket(this, settings, lifecycleScope).also { socket ->
+            socket.listener = transportListener
+            socket.onGiveUp = { reason ->
+                // A serverless backend refuses the upgrade. Rather than retrying a
+                // connection that will never hold, move to the HTTP transport — the
+                // commands still work, they just arrive when we ask for them.
+                if (settings.transport == "auto") {
+                    runOnUiThread { startPolling("$reason Switching to HTTP polling.") }
+                } else {
+                    runOnUiThread { connectionStatus = reason }
                 }
             }
             socket.start()
         }
+    }
+
+    private fun startPolling(reason: String) {
+        deviceSocket?.stop()
+        deviceSocket = null
+        connectionStatus = reason
+        pollTransport = PollTransport(this, settings, lifecycleScope).also { transportClient ->
+            transportClient.listener = transportListener
+            transportClient.start()
+        }
+    }
+
+    private val transportListener = object : DeviceSocket.Listener {
+        override fun onStatus(isConnected: Boolean, detail: String) {
+            runOnUiThread {
+                connected = isConnected
+                connectionStatus = detail
+            }
+        }
+
+        override fun onCommand(command: String, summary: String) {
+            runOnUiThread {
+                transcript.add(Turn(false, "[$command] $summary"))
+            }
+        }
+    }
+
+    private fun stopTransports() {
+        deviceSocket?.stop()
+        deviceSocket = null
+        pollTransport?.stop()
+        pollTransport = null
     }
 
     private fun listenOnce() {

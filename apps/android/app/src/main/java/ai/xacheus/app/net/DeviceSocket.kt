@@ -56,6 +56,15 @@ class DeviceSocket(
 
     @Volatile var listener: Listener? = null
 
+    /** Called when the socket has failed often enough to justify falling back. */
+    @Volatile var onGiveUp: ((String) -> Unit)? = null
+
+    /**
+     * How many consecutive failures before we stop trusting WebSockets here.
+     * A serverless host refuses the upgrade outright, so two attempts is plenty.
+     */
+    private val giveUpAfter = 2
+
     fun start() {
         if (!settings.isPaired) {
             listener?.onStatus(false, "Not paired yet — enter the server URL and device token in Settings.")
@@ -132,6 +141,12 @@ class DeviceSocket(
     private fun reconnect() {
         if (!running.get()) return
         attempt++
+        if (attempt >= giveUpAfter) {
+            running.set(false)
+            socket = null
+            onGiveUp?.invoke("This backend does not hold WebSocket connections.")
+            return
+        }
         val wait = minOf(30_000L, 1_000L * (1 shl minOf(attempt, 5)))
         listener?.onStatus(false, "Reconnecting in ${wait / 1000}s…")
         scope.launch {

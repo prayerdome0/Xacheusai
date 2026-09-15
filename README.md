@@ -63,8 +63,9 @@ Useful scripts:
 | Command | What it does |
 | --- | --- |
 | `npm run typecheck` | Strict TypeScript across core, server and web |
-| `npm test` | Kernel tests: permissions, confirmations, memory, automation safety |
+| `npm test` | 15 kernel tests: permissions, confirmations, memory, automation safety, serverless behaviour |
 | `npm run smoke` | Boots a real server and drives 56 end-to-end checks |
+| `npm run smoke:serverless` | Simulates a Vercel function: 40 checks, including both refusal paths |
 | `npm run smoke:console` | Renders the built console against a live API and asserts it painted |
 | `npm run dev` | Backend + console with hot reload |
 
@@ -328,7 +329,12 @@ GET    /api/audit
 GET    /api/devices · POST /api/devices/pair · DELETE /api/devices/:id
 POST   /api/devices/:id/command      fire-and-test the bridge
 GET    /api/models · GET /api/models/probe · POST /api/models/select
-GET    /api/stats · /api/status
+GET    /api/stats · /api/status · /api/runtime    what this deployment can really do
+
+# Device polling transport (for hosts that cannot hold a socket)
+POST   /api/devices/heartbeat        check in and collect queued commands
+POST   /api/devices/result           report what the phone did
+GET|POST /api/tasks/tick             public: drives automations from a cron (CRON_SECRET)
 
 # Webhooks / realtime
 GET|POST /api/webhooks/whatsapp      public: verify token + HMAC signature
@@ -339,6 +345,36 @@ WS     /api/devices/socket           Android bridge (device token)
 ```
 
 ---
+
+## Deploying
+
+Two shapes — and the difference is not cosmetic:
+
+| | **Always-on host** (recommended) | **Vercel** (serverless) |
+| --- | --- | --- |
+| Live run streaming | ✅ WebSocket | ❌ console polls instead |
+| Android bridge | ✅ persistent socket | ⚠️ HTTP polling transport |
+| Interval/schedule automations | ✅ built-in scheduler | ⚠️ needs a cron hitting `/api/tasks/tick` |
+| Data | local files on a volume | ⚠️ **Firestore required** |
+| Long research/code runs | no limit | ⚠️ 60 s function ceiling |
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/prayerdome0/Xacheusai&project-name=xacheus-ai&repository-name=xacheus-ai)
+
+```bash
+# Always-on, full platform
+docker build -t xacheus . && docker run -p 8787:8787 --env-file .env -v xacheus-data:/data xacheus
+
+# Vercel
+vercel --prod      # vercel.json + api/index.js are already set up
+```
+
+On Vercel, set `XACHEUS_STORAGE=firestore` with a Firebase service account. Serverless functions get a *temporary* filesystem, so Xacheus **refuses to boot** with local files there rather than lose your memory, records and audit log between requests. It also reports what it cannot do — no WebSockets, no in-process scheduler — in `/api/runtime` and in the console itself, instead of implying otherwise. Full walkthrough: **[DEPLOY.md](DEPLOY.md)**.
+
+You can verify a deployment before making it:
+
+```bash
+npm run smoke:serverless   # boots the real api/index.js with VERCEL=1 and checks all of it
+```
 
 ## Repository layout
 
@@ -358,7 +394,11 @@ packages/core/                 the brain
 apps/server/                   Fastify API: routes, guard, realtime, webhooks
 apps/web/                      React console: chat, dashboard, library, business, automations, connect, settings
 apps/android/                  Kotlin companion app (wake word, device actions)
+api/index.js                   Vercel serverless entry (one catch-all function)
+vercel.json                    build, rewrites, cron, security headers
+Dockerfile                     always-on deployment (full feature set)
 scripts/smoke.mjs              end-to-end verification against a real server
+scripts/smoke-serverless.mjs   simulates the Vercel function and its refusal paths
 ```
 
 ---
@@ -404,13 +444,20 @@ Things Xacheus deliberately does **not** do, and why:
   model for prose.
 - **Mail requires two extra packages** (`imapflow`, `nodemailer`) because they are
   heavy and only needed if you use that connector.
+- **Serverless hosting has real limits**, and Xacheus names them rather than
+  working around them: no WebSockets (the console polls, the phone uses its
+  polling transport), no in-process scheduler (a cron drives `/api/tasks/tick`),
+  and a 60-second ceiling per request. For the complete experience — live
+  streaming and a persistent phone socket — run the Docker image on a host that
+  keeps a process alive. See [DEPLOY.md](DEPLOY.md).
 
 ---
 
 ## Verifying it yourself
 
 ```bash
-npm test              # 12 kernel tests: permissions, confirmations, memory, automation safety, code jail
+npm test              # 15 kernel tests: permissions, confirmations, memory, automation safety,
+                      # code jail, cron idempotency, and the polling device transport
 npm run smoke         # 56 end-to-end checks: unconfigured integrations report sandbox, high-impact
                       # actions wait for approval, an unsigned webhook is refused, and a simulated
                       # Android phone registers over the bridge protocol and really executes a command

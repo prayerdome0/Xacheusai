@@ -80,6 +80,29 @@ Once paired you can say:
 
 ---
 
+## Connection: streaming or polling
+
+Xacheus reaches your backend two ways, and the app can do both (**Settings →
+Connection**):
+
+| Mode | When to use it |
+| --- | --- |
+| **Stream** | Your own server. One persistent WebSocket, commands arrive instantly |
+| **Poll** | Serverless hosting (Vercel and friends), or networks that break long connections. The app checks in over HTTPS every few seconds and collects any commands waiting |
+| **Auto** (default) | Tries streaming first and switches to polling automatically if the socket is refused |
+
+Polling is not a downgrade in behaviour: a command collected this way passes the
+same permission check, waits for the same owner confirmation when it is
+high-impact, and comes back with the same `live`/`sandbox` result mode. The only
+difference is who opens the connection.
+
+Endpoints used by polling (both require the device token):
+
+```
+POST /api/devices/heartbeat   { deviceId, name, capabilities }  → { commands: [...] }
+POST /api/devices/result      { id, ok, mode, summary, data }
+```
+
 ## Permissions, and why each one is asked for
 
 | Permission | Needed for | When it is requested |
@@ -135,6 +158,7 @@ app/src/main/java/ai/xacheus/app/
 ├── data/SettingsStore.kt      SharedPreferences pairing + preferences
 ├── net/XacheusClient.kt       REST: /api/voice, /api/chat, /api/runs/:id/confirm
 ├── net/DeviceSocket.kt        WebSocket to /api/devices/socket, command loop
+├── net/PollTransport.kt       HTTP transport for hosts without WebSockets
 ├── device/DeviceCommands.kt   the actual Android actions
 ├── device/PermissionGate.kt   runtime permission requests with honest results
 ├── voice/WakeWordEngine.kt    engine interface + continuous recogniser loop

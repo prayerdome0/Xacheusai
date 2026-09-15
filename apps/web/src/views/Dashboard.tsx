@@ -5,7 +5,7 @@
  */
 import { useEffect, useState } from 'react';
 import { api, type AgentRun } from '../api';
-import { useAsync, useLiveEvents, usePolling } from '../hooks';
+import { useLiveFeed, useAsync, usePolling } from '../hooks';
 
 export function DashboardView({ onNavigate }: { onNavigate: (view: string) => void }) {
   const stats = usePolling(() => api.stats(), 12000);
@@ -15,7 +15,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: string) => vo
   const [pending, setPending] = useState<AgentRun[]>([]);
   const [busy, setBusy] = useState(false);
 
-  useLiveEvents((event) => {
+  const feed = useLiveFeed((event) => {
     setEvents((current) => [`${new Date().toLocaleTimeString()} · ${event.name} ${describeEvent(event)}`, ...current].slice(0, 40));
   });
 
@@ -200,7 +200,16 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: string) => vo
         </div>
 
         <div className="card">
-          <h3>📡 Live activity</h3>
+          <h3>
+            📡 Live activity{' '}
+            {feed.transport === 'polling' ? (
+              <span className="badge" title="This host cannot hold WebSockets, so the console polls the API instead.">
+                polling
+              </span>
+            ) : feed.transport === 'websocket' ? (
+              <span className="badge live">streaming</span>
+            ) : null}
+          </h3>
           {events.length ? (
             <div className="scroll-y list">
               {events.map((line, index) => (

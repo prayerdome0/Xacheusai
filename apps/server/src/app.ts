@@ -16,6 +16,8 @@ import { registerChatRoutes } from './routes/chat.js';
 import { registerDataRoutes } from './routes/data.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerWebhookRoutes } from './routes/webhooks.js';
+import { registerDeviceTransportRoutes } from './routes/device-transport.js';
+import { registerCronRoutes } from './routes/cron.js';
 import { registerRealtime } from './realtime.js';
 
 export interface BuildOptions {
@@ -23,6 +25,8 @@ export interface BuildOptions {
   dataDir?: string;
   workspaceRoot?: string;
   logger?: boolean;
+  /** Tells the kernel whether a scheduler can actually run here. */
+  runtime?: 'server' | 'serverless';
 }
 
 export interface BuiltServer {
@@ -30,14 +34,21 @@ export interface BuiltServer {
   kernel: Kernel;
   guard: GuardOptions;
   auth: { mode: string; warning?: string };
+  /** True when this process cannot hold WebSockets or run a scheduler. */
+  perInstance: boolean;
 }
 
 export async function buildServer(options: BuildOptions = {}): Promise<BuiltServer> {
   const env = options.env ?? process.env;
+  const serverless = options.runtime === 'serverless';
   const kernel = await createKernel({
     env,
     dataDir: options.dataDir,
     workspaceRoot: options.workspaceRoot,
+    runtime: options.runtime,
+    // A ticker inside a frozen function never fires; drive automations with a
+    // cron instead of pretending they are scheduled.
+    ...(serverless ? { startAutomations: false } : {}),
   });
 
   const guard: GuardOptions = {
@@ -118,6 +129,11 @@ export async function buildServer(options: BuildOptions = {}): Promise<BuiltServ
         modelBuiltin: kernel.services.models.builtin,
         storage: kernel.services.storage.id,
         tools: kernel.services.tools.list().length,
+        // Capability flags, so the console can choose polling over WebSockets and
+        // warn about ephemeral storage before the owner wonders where data went.
+        runtime: kernel.services.runtime,
+        websockets: kernel.services.runtime !== 'serverless',
+        durableStorage: kernel.services.runtime !== 'serverless' && kernel.services.storage.id !== 'memory',
       },
     };
   });
@@ -128,6 +144,15 @@ export async function buildServer(options: BuildOptions = {}): Promise<BuiltServ
   // Provider webhooks authenticate the caller (verify token / HMAC signature)
   // rather than the owner, so they deliberately sit outside the passcode guard.
   registerWebhookRoutes(app, kernel);
+
+  // The automation tick authenticates with CRON_SECRET / the owner passcode so a
+  // scheduler that cannot hold a session can still drive it.
+  registerCronRoutes(app, kernel);
+
+  // Device polling + the automation cron hook sit inside the guard: they act as
+  // the owner (device token or passcode), which is exactly the authority they
+  // need and nothing more.
+  registerDeviceTransportRoutes(app, kernel);
 
   const runs = new RunStore(kernel);
   await app.register(async (guarded) => {
@@ -159,7 +184,7 @@ export async function buildServer(options: BuildOptions = {}): Promise<BuiltServ
     });
   });
 
-  return { app, kernel, guard, auth };
+  return { app, kernel, guard, auth, perInstance: serverless };
 }
 
 export { DEFAULT_OWNER };

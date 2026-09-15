@@ -72,25 +72,43 @@ export interface LiveEvent {
 }
 
 /** Subscribe to the backend's event bus. */
-export function useLiveEvents(onEvent?: (event: LiveEvent) => void, enabled = true): LiveEvent[] {
+export interface LiveFeed {
+  events: LiveEvent[];
+  /** How the feed is actually arriving — so the UI never implies a live stream it lacks. */
+  transport: 'websocket' | 'polling' | 'idle';
+}
+
+export function useLiveFeed(onEvent?: (event: LiveEvent) => void, enabled = true): LiveFeed {
   const [events, setEvents] = useState<LiveEvent[]>([]);
+  const [transport, setTransport] = useState<'websocket' | 'polling' | 'idle'>('idle');
   const handler = useRef(onEvent);
   handler.current = onEvent;
 
   useEffect(() => {
-    if (!enabled) return;
-    const disconnect = connectEvents((event) => {
-      if (event.name === 'hello') {
-        setEvents((Array.isArray(event.payload) ? event.payload : []).slice(0, 30));
-        return;
-      }
-      setEvents((current) => [event, ...current].slice(0, 60));
-      handler.current?.(event);
-    });
-    return disconnect;
+    if (!enabled) {
+      setTransport('idle');
+      return;
+    }
+    const channel = connectEvents(
+      (event) => {
+        if (event.name === 'hello') {
+          setEvents((Array.isArray(event.payload) ? event.payload : []).slice(0, 30));
+          return;
+        }
+        setEvents((current) => [event, ...current].slice(0, 60));
+        handler.current?.(event);
+      },
+      (next) => setTransport(next),
+    );
+    return () => channel.close();
   }, [enabled]);
 
-  return events;
+  return { events, transport };
+}
+
+/** Backwards-compatible helper for callers that only want the event list. */
+export function useLiveEvents(onEvent?: (event: LiveEvent) => void, enabled = true): LiveEvent[] {
+  return useLiveFeed(onEvent, enabled).events;
 }
 
 /** --------------------------------------------------------------- voice input */

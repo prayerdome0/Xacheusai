@@ -6,13 +6,17 @@
  * to guess which parts are live.
  */
 import 'dotenv/config';
-import { buildServer } from './app.js';
+import { getServer } from './kernel-instance.js';
 
 async function main(): Promise<void> {
   const port = Number(process.env.PORT ?? 8787);
   const host = process.env.HOST ?? '0.0.0.0';
 
-  const { app, kernel, auth } = await buildServer();
+  // getServer() reuses a warm kernel and refuses to boot with throwaway storage
+  // on a platform that cannot keep it. See storage-guard.ts.
+  const handle = await getServer();
+  const { kernel, storage } = handle;
+  const { app, auth } = handle.built;
 
   const { services } = kernel;
   const connectors = services.connectors.statuses();
@@ -29,11 +33,13 @@ async function main(): Promise<void> {
   log(line);
   log(`  URL            http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`);
   log(`  Auth           ${auth.mode}`);
-  log(`  Storage        ${services.storage.id}`);
+  log(`  Storage        ${services.storage.id}${storage.durable ? ' (durable)' : ' (NOT durable)'}`);
+  if (!storage.durable) log(`   • ${storage.detail}`);
   log(`  Model layer    ${services.models.active.label} (${services.models.active.locality})`);
   log(`  Tools          ${services.tools.list().length} registered`);
   log(`  Automations    ${(await services.automations.list()).filter((automation) => automation.enabled).length} enabled`);
   log(`  Workspace root ${services.workspaceRoot}`);
+  log(`  Runtime        ${handle.perInstance ? 'serverless — console polls, automations need a cron' : `long-running process (instance ${handle.reused ? 'reused' : 'fresh'})`}`);
   log(line);
   log(`  Connectors live: ${live.length}/${connectors.length}${live.length ? ` (${live.map((connector) => connector.id).join(', ')})` : ''}`);
   if (missing.length) {
@@ -44,6 +50,7 @@ async function main(): Promise<void> {
   for (const note of [...services.models.notes, ...(auth.warning ? [auth.warning] : [])]) {
     log(`  ! ${note}`);
   }
+  if (!storage.durable && storage.warning) log(`  ! ${storage.warning}`);
   log(line);
 
   const shutdown = async (signal: string): Promise<void> => {

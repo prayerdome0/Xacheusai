@@ -32,7 +32,7 @@ export { DocumentService, guessCategory } from './documents/documents.js';
 export { extractText } from './documents/extract.js';
 export { AutomationService, starterAutomations } from './automation/automation.js';
 export { DeviceBridge, DEVICE_COMMANDS } from './devices/bridge.js';
-export type { DeviceCommand, DeviceSession, DeviceSocket } from './devices/bridge.js';
+export type { DeviceCommand, DeviceSession, DeviceSocket, DeviceTransport, QueuedCommand } from './devices/bridge.js';
 export { createModelRegistry, completeWithFallback, HeuristicProvider } from './models/providers.js';
 export type { ModelRegistry } from './models/providers.js';
 export { createConnectorRegistry } from './connectors/index.js';

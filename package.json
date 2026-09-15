@@ -23,7 +23,9 @@
     "smoke": "node scripts/smoke.mjs",
     "pretest": "npm run build -w @xacheus/core",
     "presmoke": "npm run build",
-    "smoke:console": "node scripts/console-render.mjs"
+    "smoke:console": "node scripts/console-render.mjs",
+    "smoke:serverless": "node scripts/smoke-serverless.mjs",
+    "presmoke:serverless": "npm run build"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

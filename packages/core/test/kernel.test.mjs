@@ -237,6 +237,102 @@ test('the data directory holds real, portable JSON for the owner', async () => {
   }
 });
 
+test('the kernel knows when it is on a platform that cannot schedule', async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'xacheus-serverless-'));
+  try {
+    const kernel = await createKernel({
+      dataDir,
+      startAutomations: false,
+      runtime: 'serverless',
+      env: { ...process.env, XACHEUS_STORAGE: 'json', VERCEL: '1' },
+    });
+    assert.equal(kernel.services.runtime, 'serverless');
+    await kernel.close();
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('an external tick runs due automations and skips the rest', async () => {
+  const { kernel, dataDir } = await freshKernel();
+  try {
+    const due = await kernel.services.automations.create({
+      name: 'Due interval sweep',
+      enabled: true,
+      trigger: { type: 'interval', everyMinutes: 1 },
+      actions: [{ tool: 'business.snapshot', input: {} }],
+    });
+    const notDue = await kernel.services.automations.create({
+      name: 'Scheduled far ahead',
+      enabled: true,
+      trigger: { type: 'schedule', at: '23:59' },
+      actions: [{ tool: 'business.snapshot', input: {} }],
+    });
+    const disabled = await kernel.services.automations.create({
+      name: 'Switched off',
+      enabled: false,
+      trigger: { type: 'interval', everyMinutes: 1 },
+      actions: [{ tool: 'business.snapshot', input: {} }],
+    });
+
+    const result = await kernel.services.automations.tickExternal(new Date('2026-09-15T08:00:00Z'));
+    const ranIds = result.ran.map((entry) => entry.automationId);
+    assert.ok(ranIds.includes(due.id), 'the due interval automation should have run');
+    assert.ok(!ranIds.includes(disabled.id), 'a disabled automation must never run');
+    assert.ok(result.skipped >= 1, 'the tick should report what it skipped');
+
+    // A tick must be idempotent within its own interval, or a cron running twice
+    // would double every action.
+    const again = await kernel.services.automations.tickExternal(new Date('2026-09-15T08:00:30Z'));
+    assert.ok(!again.ran.some((entry) => entry.automationId === due.id), 'a second tick inside the interval should not repeat the run');
+    void notDue;
+  } finally {
+    await kernel.close();
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('a polling device receives queued commands and its answers are recorded', async () => {
+  const { kernel, dataDir } = await freshKernel();
+  try {
+    const bridge = kernel.services.devices;
+    bridge.registerPolling({
+      deviceId: 'test-poll-phone',
+      name: 'Test Phone',
+      platform: 'android',
+      appVersion: 'test',
+      capabilities: ['device.batteryStatus'],
+    });
+
+    const result = await bridge.command('device.batteryStatus', {}, { deviceId: 'test-poll-phone' });
+    assert.equal(result.ok, true);
+    assert.equal(result.data.queued, true, 'the caller is told it was queued, not executed');
+    assert.match(result.summary, /queued/i);
+
+    const drained = bridge.drainQueue('test-poll-phone');
+    assert.equal(drained.length, 1);
+    assert.equal(drained[0].command, 'device.batteryStatus');
+
+    const settled = bridge.settleQueued({
+      id: drained[0].id,
+      ok: true,
+      mode: 'live',
+      summary: 'Battery is at 61%.',
+      data: { level: 61 },
+    });
+    assert.equal(settled, true, 'the phone result must be correlated, not dropped');
+
+    const recent = bridge.recent(5);
+    assert.ok(recent.some((entry) => /61%/.test(entry.summary)), 'the phone answer should appear in the command history');
+
+    // An unknown id (timeout, or another instance) is reported, not swallowed.
+    assert.equal(bridge.settleQueued({ id: 'cmd_unknown', ok: true, summary: 'late' }), false);
+  } finally {
+    await kernel.close();
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
 function toolContext(kernel) {
   return {
     principal: { id: 'owner', role: 'owner', displayName: 'Owner' },

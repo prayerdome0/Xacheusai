@@ -30,8 +30,16 @@ export interface KernelOptions {
   env?: NodeJS.ProcessEnv;
   dataDir?: string;
   workspaceRoot?: string;
-  /** Start the automation scheduler (default true). */
+  /**
+   * Start the automation scheduler (default true).
+   *
+   * Set false on serverless platforms: a ticker inside a function that is frozen
+   * between requests would silently never fire, and a scheduler that quietly does
+   * nothing is worse than an honest "run it on a box or a cron job".
+   */
   startAutomations?: boolean;
+  /** Where the process is running, used to explain which features are unavailable. */
+  runtime?: 'server' | 'serverless';
 }
 
 export interface Kernel {
@@ -55,12 +63,22 @@ export async function createKernel(options: KernelOptions = {}): Promise<Kernel>
   const config = new ConfigStore(env, dataDir);
   await config.load();
 
-  const storage = (await createStorage({
+  const storageSelection = await createStorage({
     driver: (config.value('XACHEUS_STORAGE', 'json') as 'json' | 'firestore' | 'memory') ?? 'json',
     dataDir,
     serviceAccountPath: config.value('GOOGLE_APPLICATION_CREDENTIALS'),
     serviceAccountJson: config.value('FIREBASE_SERVICE_ACCOUNT_JSON'),
-  })).driver;
+  });
+  const storage = storageSelection.driver;
+  /**
+   * Why the storage driver you asked for is not the one you got.
+   *
+   * This matters most on hosting where the filesystem is temporary: a silent
+   * fallback from Firestore to local files would mean accepting writes that
+   * disappear. The notes are surfaced so the startup banner and /api/runtime can
+   * say it out loud instead.
+   */
+  const storageNotes = storageSelection.notes;
 
   const events = new EventBus(300);
   const audit = new AuditLog(dataDir);
@@ -102,9 +120,14 @@ export async function createKernel(options: KernelOptions = {}): Promise<Kernel>
     services: () => services,
   });
 
+  const runtimeKind: 'server' | 'serverless' =
+    options.runtime ?? (env.VERCEL || env.AWS_LAMBDA_FUNCTION_NAME ? 'serverless' : 'server');
+
   const services = {
+    runtime: runtimeKind,
     config,
     storage,
+    storageNotes,
     events,
     audit,
     permissions,
@@ -133,6 +156,7 @@ export async function createKernel(options: KernelOptions = {}): Promise<Kernel>
   services.orchestrator = orchestrator;
 
   if (options.startAutomations !== false) await automations.start();
+  for (const note of storageNotes) events.emit('connector.updated', { note: `Storage: ${note}` });
 
   // Health notice: it is important that the owner knows when a piece is missing.
   const storageHealth = await storage.healthy();

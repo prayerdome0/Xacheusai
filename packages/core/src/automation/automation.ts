@@ -63,6 +63,68 @@ export class AutomationService {
     this.unsubscribers.length = 0;
   }
 
+  /**
+   * Evaluate triggers now, once.
+   *
+   * This is what a cron calls on a platform where an in-process interval would
+   * never fire (a serverless function that is frozen between requests). It runs
+   * exactly the same due-date logic as [tick], so the behaviour of a cron-driven
+   * deployment matches a long-running server — and the returned counts let the
+   * caller see that something actually happened.
+   */
+  async tickExternal(now = new Date()): Promise<{
+    ran: { automationId: string; name: string; status: string; detail: string }[];
+    fired: { automation: string; trigger: string; status: string; runs: number }[];
+    skipped: number;
+  }> {
+    const automations = await this.list();
+    const ran: { automationId: string; name: string; status: string; detail: string }[] = [];
+    const fired: { automation: string; trigger: string; status: string; runs: number }[] = [];
+    let skipped = 0;
+
+    for (const automation of automations) {
+      if (!automation.enabled) {
+        skipped += 1;
+        continue;
+      }
+
+      let trigger: string | null = null;
+      if (automation.trigger.type === 'interval') {
+        const every = Math.max(automation.trigger.everyMinutes ?? 60, 1);
+        const last = automation.lastRunAt ? Date.parse(automation.lastRunAt) : 0;
+        if (now.getTime() - last >= every * 60_000) trigger = `interval:${every}m`;
+      } else if (automation.trigger.type === 'schedule') {
+        const [hour, minute] = (automation.trigger.at ?? '').split(':').map(Number);
+        if (Number.isFinite(hour) && Number.isFinite(minute)) {
+          const due = new Date(now);
+          due.setHours(hour!, minute!, 0, 0);
+          const last = automation.lastRunAt ? Date.parse(automation.lastRunAt) : 0;
+          if (now.getTime() >= due.getTime() && last < due.getTime()) trigger = `schedule:${automation.trigger.at}`;
+        }
+      } else {
+        // Event and webhook triggers are pushed to us, never polled.
+        skipped += 1;
+        continue;
+      }
+
+      if (!trigger) {
+        skipped += 1;
+        continue;
+      }
+
+      const run = await this.run(automation, trigger);
+      ran.push({ automationId: automation.id, name: automation.name, status: run.status, detail: run.detail });
+      fired.push({
+        automation: automation.name,
+        trigger,
+        status: run.status,
+        runs: ((automation as Automation & { runCount?: number }).runCount ?? 0) + 1,
+      });
+    }
+
+    return { ran, fired, skipped };
+  }
+
   /** --------------------------------------------------------------- catalogue */
 
   async list(): Promise<Automation[]> {

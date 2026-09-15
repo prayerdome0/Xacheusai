@@ -59,7 +59,10 @@ export function App() {
           <div className="brand-mark">🧠</div>
           <div>
             <div className="brand-name">Xacheus AI</div>
-            <div className="brand-sub">private agent · {config.features.storage}</div>
+            <div className="brand-sub">
+              private agent · {config.features.storage}
+              {config.features.durableStorage === false ? ' (temporary)' : ''}
+            </div>
           </div>
         </div>
         {NAV.map((item) => (
@@ -82,6 +85,20 @@ export function App() {
         {view === 'library' ? <LibraryView /> : null}
         {view === 'business' ? <BusinessView /> : null}
         {view === 'automate' ? <AutomateView /> : null}
+        {(config.features.durableStorage === false || config.features.websockets === false) && view === 'dashboard' ? (
+          <div className="banner warn" style={{ marginBottom: 14 }}>
+            <strong>This deployment is running without durable storage.</strong>{' '}
+            {config.features.runtime === 'serverless'
+              ? 'Serverless functions get a fresh, temporary filesystem per instance, so anything you store can disappear. Set '
+              : 'The filesystem here is writable but temporary — set '}
+            <code>XACHEUS_STORAGE=firestore</code> with a Firebase service account for persistence, and keep the audit log somewhere that survives.
+            {config.features.websockets === false
+              ? ' WebSockets are also unavailable on this host, so the console polls for updates and the Android app uses its polling device transport.'
+              : ''}
+            {' '}
+            See <code>DEPLOY.md</code>.
+          </div>
+        ) : null}
         {view === 'connect' ? <ConnectView /> : null}
         {view === 'settings' ? <SettingsView /> : null}
       </main>
