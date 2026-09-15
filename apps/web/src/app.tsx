@@ -28,6 +28,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    document.title = 'Xacheus AI — Control Center';
     api
       .publicConfig()
       .then((data) => {
@@ -55,7 +56,7 @@ export function App() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand">
+        <a className="brand brand-link" href="/" title="Back to the landing page">
           <div className="brand-mark">🧠</div>
           <div>
             <div className="brand-name">Xacheus AI</div>
@@ -64,7 +65,7 @@ export function App() {
               {config.features.durableStorage === false ? ' (temporary)' : ''}
             </div>
           </div>
-        </div>
+        </a>
         {NAV.map((item) => (
           <button key={item.id} className={`nav-item ${view === item.id ? 'active' : ''}`} onClick={() => setView(item.id)}>
             <span>{item.icon}</span>
