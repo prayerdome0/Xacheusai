@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Files this app is willing to hand to the camera app or share out. -->
+<paths>
+    <cache-path name="captures" path="captures/" />
+    <cache-path name="voice" path="." />
+    <files-path name="files" path="." />
+</paths>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose supplies the real theming; this keeps the launch window dark. -->
+    <style name="Theme.Xacheus" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/xacheus_background</item>
+        <item name="android:statusBarColor">@color/xacheus_background</item>
+        <item name="android:navigationBarColor">@color/xacheus_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Xacheus</string>
+    <string name="channel_listening">Wake word</string>
+    <string name="channel_replies">Replies</string>
+    <string name="listening_title">Xacheus is listening for “Xacheus”</string>
+    <string name="listening_text">Say “Xacheus” followed by your request. Tap to stop.</string>
+    <string name="stop_listening">Stop</string>
+</resources>
