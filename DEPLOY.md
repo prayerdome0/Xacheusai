@@ -144,12 +144,12 @@ Dashboard: **Add New → Project → Import Git Repository** → pick your repo 
 > workspace monorepo: the root `package.json` lists `packages/*`, `apps/server`
 > and `apps/web`, and `vercel.json`'s paths (`apps/web/dist`, `api/index.js`)
 > are written relative to that root. If Root Directory points at a single
-> workspace, Vercel installs only that workspace's tree (≈108 packages instead
-> of ≈309) and runs that workspace's `build` alone — `@xacheus/core` is never
-> compiled and the console is never built, so the deploy cannot work.
-> Each workspace now declares its own `typescript` devDependency, so the
-> compiler is present no matter how the install is scoped, but only a
-> root-level build produces the full artifact.
+> workspace, Vercel installs only that workspace's tree (≈109 packages instead
+> of ≈309) and runs that workspace's `build` alone, so the console in
+> `apps/web/dist` — the configured `outputDirectory` — is never produced.
+> Each workspace declares its own `typescript` devDependency and
+> `@xacheus/server` builds `@xacheus/core` first, so the API compiles under any
+> install scope; only a root-level build produces the complete artifact.
 
 Or from the CLI:
 

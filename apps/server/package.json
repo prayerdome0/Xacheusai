@@ -6,9 +6,11 @@
   "description": "Xacheus AI backend: inference orchestration, agents, tools, memory, knowledge, connector gateway",
   "main": "./dist/index.js",
   "scripts": {
+    "prebuild": "npm run build -w @xacheus/core",
     "build": "npx tsc -p tsconfig.json",
     "dev": "npx tsx watch src/index.ts",
     "start": "node dist/index.js",
+    "pretypecheck": "npm run build -w @xacheus/core",
     "typecheck": "npx tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
