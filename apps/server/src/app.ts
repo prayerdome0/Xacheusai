@@ -164,8 +164,16 @@ export async function buildServer(options: BuildOptions = {}): Promise<BuiltServ
 
   /** Serve the built console when it exists (single-origin deployments). */
   const here = dirname(fileURLToPath(import.meta.url));
-  const webDist = resolve(here, '../../web/dist');
-  if (existsSync(webDist)) {
+  // Vite outputs the console bundle to the repo-root dist/ (see
+  // apps/web/vite.config.ts) because Vercel's zero-config looks for a root
+  // `dist` folder. When running from source (dev/test) the bundle lives under
+  // apps/web/dist — check both locations so both deployment shapes work.
+  const webDistCandidates = [
+    resolve(here, '../../../dist'),     // production / Vercel build output (repo root)
+    resolve(here, '../../web/dist'),    // workspace-local build (apps/web/dist)
+  ];
+  const webDist = webDistCandidates.find((p) => existsSync(p));
+  if (webDist) {
     await app.register(fastifyStatic, { root: webDist, prefix: '/' });
     app.setNotFoundHandler((request, reply) => {
       if (request.url.startsWith('/api/')) {
@@ -190,5 +198,6 @@ export async function buildServer(options: BuildOptions = {}): Promise<BuiltServ
 export { DEFAULT_OWNER };
 export function webDistPath(): string {
   const here = dirname(fileURLToPath(import.meta.url));
-  return join(here, '../../web/dist');
+  const candidates = [join(here, '../../../dist'), join(here, '../../web/dist')];
+  return candidates.find((p) => existsSync(p)) ?? candidates[0]!;
 }

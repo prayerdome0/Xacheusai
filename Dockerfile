@@ -37,7 +37,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=build /app/packages/core/dist packages/core/dist
 COPY --from=build /app/apps/server/dist apps/server/dist
-COPY --from=build /app/apps/web/dist apps/web/dist
+COPY --from=build /app/dist dist
 
 # Data lives on a volume: memory, business records, knowledge index, audit log.
 VOLUME ["/data"]

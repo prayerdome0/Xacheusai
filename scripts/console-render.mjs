@@ -14,13 +14,16 @@
  *
  * Exits non-zero if the console throws, renders nothing, or never shows data.
  */
+import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { JSDOM } from 'jsdom';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const distDir = join(root, 'apps/web/dist');
+// Vite outputs to the repo-root dist/ (see apps/web/vite.config.ts) so Vercel's
+// zero-config can find it. Fall back to the workspace-local path for older builds.
+const distDir = [join(root, 'dist'), join(root, 'apps/web/dist')].find((p) => existsSync(join(p, 'index.html'))) ?? join(root, 'dist');
 const apiBase = process.env.XACHEUS_API_URL ?? 'http://127.0.0.1:8787';
 
 const failures = [];
@@ -115,12 +118,12 @@ window.fetch = globalThis.fetch;
 
 // ---------------------------------------------------------------- the bundle
 
-console.log(`\u001b[1mXacheus console render check\u001b[0m — bundle from apps/web/dist, API at ${apiBase}\n`);
+console.log(`\u001b[1mXacheus console render check\u001b[0m — bundle from ${distDir}, API at ${apiBase}\n`);
 
 const indexPath = join(distDir, 'index.html');
 const indexHtml = await readFile(indexPath, 'utf8').catch(() => null);
 if (!indexHtml) {
-  console.error('apps/web/dist/index.html is missing — run `npm run build -w @xacheus/web` first.');
+  console.error('dist/index.html is missing — run `npm run build` first.');
   process.exit(1);
 }
 
