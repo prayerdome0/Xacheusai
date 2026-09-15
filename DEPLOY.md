@@ -140,6 +140,17 @@ Optional but useful: `OPENAI_API_KEY` + `XACHEUS_MODEL=openai` (or `ANTHROPIC_AP
 
 Dashboard: **Add New → Project → Import Git Repository** → pick your repo → it reads `vercel.json` (build `npm run build`, output `apps/web/dist`) → Deploy.
 
+> **Root Directory must be the repository root (leave it blank).** This is a
+> workspace monorepo: the root `package.json` lists `packages/*`, `apps/server`
+> and `apps/web`, and `vercel.json`'s paths (`apps/web/dist`, `api/index.js`)
+> are written relative to that root. If Root Directory points at a single
+> workspace, Vercel installs only that workspace's tree (≈108 packages instead
+> of ≈309) and runs that workspace's `build` alone — `@xacheus/core` is never
+> compiled and the console is never built, so the deploy cannot work.
+> Each workspace now declares its own `typescript` devDependency, so the
+> compiler is present no matter how the install is scoped, but only a
+> root-level build produces the full artifact.
+
 Or from the CLI:
 
 ```bash

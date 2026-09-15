@@ -19,6 +19,7 @@
     "dev:web": "npm run dev -w @xacheus/web",
     "start": "node apps/server/dist/index.js",
     "typecheck": "npm run typecheck -w @xacheus/core && npm run typecheck -w @xacheus/server && npm run typecheck -w @xacheus/web",
+    "pretypecheck": "npm run build -w @xacheus/core",
     "test": "node --test packages/core/test/*.test.mjs",
     "smoke": "node scripts/smoke.mjs",
     "pretest": "npm run build -w @xacheus/core",

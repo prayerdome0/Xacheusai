@@ -6,10 +6,10 @@
   "description": "Xacheus AI console: voice + chat interface, Control Center, memory, knowledge, automations, audit",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
-    "build:only": "vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "build": "npx tsc -p tsconfig.json --noEmit && npx vite build",
+    "build:only": "npx vite build",
+    "preview": "npx vite preview",
+    "typecheck": "npx tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "firebase": "^11.2.0",
