@@ -46,7 +46,7 @@ npm install
 
 cp .env.example .env        # everything is optional; edit as you go
 npm run build               # build core, server and the console
-npm start                   # → http://localhost:8787
+npm start                   # → http://localhost:8787 (landing page · console at /console)
 ```
 
 Open **http://localhost:8787** — the backend serves the built console. Type
