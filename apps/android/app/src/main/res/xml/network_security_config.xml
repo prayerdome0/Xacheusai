@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext is allowed only so you can reach a backend on your own LAN
+  (http://192.168.x.x:8787) while developing. Point Xacheus at an HTTPS URL and
+  tighten this file — for example by removing the cleartextTrafficPermitted
+  attribute entirely — before using the app over untrusted networks.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

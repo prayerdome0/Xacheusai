@@ -1,0 +1,35 @@
+{
+  "name": "xacheus-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Xacheus AI \u2014 private personal + business AI agent platform",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/server",
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build -w @xacheus/core && npm run build -w @xacheus/server && npm run build -w @xacheus/web",
+    "dev": "concurrently -n server,web -c cyan,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev -w @xacheus/server",
+    "dev:web": "npm run dev -w @xacheus/web",
+    "start": "node apps/server/dist/index.js",
+    "typecheck": "npm run typecheck -w @xacheus/core && npm run typecheck -w @xacheus/server && npm run typecheck -w @xacheus/web",
+    "test": "node --test packages/core/test/*.test.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "pretest": "npm run build -w @xacheus/core",
+    "presmoke": "npm run build",
+    "smoke:console": "node scripts/console-render.mjs",
+    "smoke:serverless": "node scripts/smoke-serverless.mjs",
+    "presmoke:serverless": "npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "jsdom": "^30.0.1",
+    "typescript": "^5.7.3"
+  }
+}

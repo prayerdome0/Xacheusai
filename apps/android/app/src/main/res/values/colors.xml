@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="xacheus_background">#07080F</color>
+    <color name="xacheus_surface">#131735</color>
+    <color name="xacheus_accent">#7C5CFF</color>
+</resources>

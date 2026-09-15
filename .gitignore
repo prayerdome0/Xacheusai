@@ -1,0 +1,33 @@
+node_modules/
+dist/
+build/
+out/
+coverage/
+*.tsbuildinfo
+
+# Local runtime state (memory, audit log, knowledge index, uploads)
+.data/
+apps/server/.data/
+apps/web/.data/
+uploads/
+
+# Secrets — never commit
+.env
+.env.local
+.env.*.local
+*.pem
+*serviceAccount*.json
+apps/android/local.properties
+apps/android/.gradle/
+apps/android/app/build/
+apps/android/build/
+apps/android/key.properties
+apps/android/**/*.keystore
+apps/android/**/*.jks
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.log
+npm-debug.log*

@@ -1,0 +1,17 @@
+# Android / Gradle build output and local machine state
+.gradle/
+build/
+app/build/
+local.properties
+captures/
+*.iml
+.idea/
+.kotlin/
+
+# Wrapper JAR is a binary; Android Studio regenerates it on first sync.
+gradle/wrapper/gradle-wrapper.jar
+
+# Never commit signing material
+*.jks
+*.keystore
+keystore.properties
