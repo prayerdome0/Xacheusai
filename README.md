@@ -64,7 +64,7 @@ Useful scripts:
 | --- | --- |
 | `npm run typecheck` | Strict TypeScript across core, server and web |
 | `npm test` | Kernel tests: permissions, confirmations, memory, automation safety |
-| `npm run smoke` | Boots a real server and drives 52 end-to-end checks |
+| `npm run smoke` | Boots a real server and drives 56 end-to-end checks |
 | `npm run smoke:console` | Renders the built console against a live API and asserts it painted |
 | `npm run dev` | Backend + console with hot reload |
 
@@ -411,14 +411,18 @@ Things Xacheus deliberately does **not** do, and why:
 
 ```bash
 npm test              # 12 kernel tests: permissions, confirmations, memory, automation safety, code jail
-npm run smoke         # 52 end-to-end checks against a booted server, including the webhook HMAC
+npm run smoke         # 56 end-to-end checks: unconfigured integrations report sandbox, high-impact
+                      # actions wait for approval, an unsigned webhook is refused, and a simulated
+                      # Android phone registers over the bridge protocol and really executes a command
 npm run smoke:console # mounts the built console in a DOM against a live API and checks it renders
 ```
 
-The smoke run is the honest one: it asserts that unconfigured integrations report
-sandbox mode, that publishing without permission is blocked with instructions,
-that declining executes nothing, that an unpaired phone is never claimed to have
-acted, and that unsigned webhooks are rejected.
+The smoke run is the honest one. It asserts that unconfigured integrations report
+sandbox mode, that publishing without permission is blocked with instructions and
+the scope to grant, that declining executes nothing, that an unpaired phone is
+never claimed to have acted — and then it connects a *simulated Android phone*
+over the real bridge WebSocket and checks that a device command comes back as
+`live` with the phone's own answer.
 
 ---
 

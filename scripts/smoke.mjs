@@ -89,6 +89,7 @@ const server = spawn(process.execPath, ['apps/server/dist/index.js'], {
     XACHEUS_CORS_ORIGINS: '*',
     WHATSAPP_VERIFY_TOKEN: 'smoke-verify-token',
     WHATSAPP_APP_SECRET: 'smoke-app-secret',
+    XACHEUS_DEVICE_BRIDGE_TOKEN: 'smoke-device-token',
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -275,6 +276,60 @@ try {
     deviceCommand.ok && /simulat|no .*device|not connected|pair/i.test(deviceCommand.body.result?.summary ?? ''),
     deviceCommand.body.result?.summary?.slice(0, 120),
   );
+
+  const deviceToken = await call(
+    `/api/devices/socket?deviceId=smoke-phone&name=Smoke%20Phone&platform=android&appVersion=smoke&token=wrong-token`,
+    {},
+  );
+  check('the device bridge rejects a wrong bridge token', deviceToken.status >= 400 || deviceToken.body?.error !== undefined);
+
+  // Connect a simulated Android phone speaking the real bridge protocol and make
+  // it answer a command. This is the check that "live" really means live.
+  const phone = new WebSocket(
+    `ws://127.0.0.1:${PORT}/api/devices/socket?deviceId=smoke-phone&name=Smoke%20Phone&platform=android&appVersion=smoke&token=smoke-device-token`,
+  );
+  const phoneReady = new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), 5000);
+    phone.addEventListener('message', (event) => {
+      const frame = JSON.parse(event.data);
+      if (frame.type === 'ready') {
+        clearTimeout(timer);
+        resolve(true);
+      }
+      if (frame.type === 'command') {
+        phone.send(
+          JSON.stringify({
+            type: 'result',
+            id: frame.id,
+            ok: true,
+            mode: 'live',
+            summary: `Smoke phone executed ${frame.command}.`,
+            data: { model: 'simulated Pixel' },
+          }),
+        );
+      }
+    });
+  });
+  check('a phone speaking the bridge protocol registers with the backend', await phoneReady);
+
+  await call('/api/devices/pair', { method: 'POST', body: { deviceId: 'smoke-phone', name: 'Smoke Phone' }, token });
+  const bridged = await call('/api/devices/smoke-phone/command', {
+    method: 'POST',
+    body: { command: 'device.info', args: {} },
+    token,
+  });
+  check(
+    'a command reaches the connected phone and returns its real answer',
+    bridged.body.result?.mode === 'live' && /Smoke phone executed device\.info/.test(bridged.body.result?.summary ?? ''),
+    `${bridged.body.result?.mode}: ${bridged.body.result?.summary?.slice(0, 80)}`,
+  );
+
+  const connectedList = await call('/api/devices', { token });
+  check(
+    'the connected phone is shown in the Control Center',
+    (connectedList.body.connected ?? []).some((entry) => entry.deviceId === 'smoke-phone'),
+  );
+  phone.close();
 
   section('7. Automations, notifications and the audit trail');
 
